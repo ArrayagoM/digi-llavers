@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digi Llavers — Crear QR</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --surface2: #1f1f1f;
+      --border: #2a2a2a;
+      --gold: #c9a84c;
+      --gold-light: #e8c87e;
+      --text: #f0f0f0;
+      --text-muted: #888;
+      --radius: 16px;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 60px;
+      gap: 32px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+    }
+    header .logo { font-size: 40px; }
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-top: 8px;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--gold);
+      background: rgba(201,168,76,.05);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .drop-zone .drop-icon { font-size: 36px; }
+    .drop-zone .drop-label {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .drop-zone .drop-label strong {
+      color: var(--gold-light);
+    }
+    .drop-zone .drop-types {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* ── File selected preview ── */
+    .file-preview {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border-radius: 10px;
+    }
+    .file-preview.visible { display: flex; }
+    .file-preview .file-icon { font-size: 28px; }
+    .file-preview .file-info { flex: 1; overflow: hidden; }
+    .file-preview .file-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-preview .file-size {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .file-preview .clear-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+      border-radius: 6px;
+      transition: color .15s;
+    }
+    .file-preview .clear-btn:hover { color: var(--text); }
+
+    /* ── Button ── */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: var(--gold);
+      color: #0d0d0d;
+      font-weight: 700;
+      font-size: 15px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    .btn:hover:not(:disabled) { background: var(--gold-light); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      display: none;
+      margin-top: 16px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      height: 4px;
+    }
+    .progress-wrap.visible { display: block; }
+    .progress-bar {
+      height: 100%;
+      background: var(--gold);
+      width: 0%;
+      transition: width .3s;
+    }
+
+    /* ── Result ── */
+    .result {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      text-align: center;
+    }
+    .result.visible { display: flex; }
+
+    .result h2 { font-size: 18px; }
+    .result p { color: var(--text-muted); font-size: 13px; }
+
+    .qr-wrapper {
+      background: #fff;
+      padding: 16px;
+      border-radius: 12px;
+    }
+    .qr-wrapper img { display: block; width: 220px; height: 220px; }
+
+    .result-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn-outline {
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .btn-outline:hover { border-color: var(--gold); color: var(--gold-light); }
+
+    .url-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .url-row input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      outline: none;
+    }
+    .url-row button {
+      background: none;
+      border: none;
+      color: var(--gold);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .url-row button:hover { color: var(--gold-light); }
+
+    .reset-btn {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .reset-btn:hover { color: var(--text); }
+
+    /* ── Error ── */
+    .error-msg {
+      display: none;
+      color: #f87171;
+      font-size: 13px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(248,113,113,.08);
+      border-radius: 8px;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── Footer ── */
+    footer {
+      font-size: 11px;
+      color: #333;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">🔑</div>
+    <h1>Digi Llavers</h1>
+    <p>Subí tu audio, canción o video — obtené un QR para tu llavero</p>
+  </header>
+
+  <div class="card">
+
+    <!-- Upload form -->
+    <div id="uploadSection">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="audio/*,video/*">
+        <div class="drop-icon">🎵</div>
+        <div class="drop-label">
+          <strong>Elegí un archivo</strong> o arrastralo acá
+        </div>
+        <div class="drop-types">Audio de WhatsApp · MP3 · MP4 · Video</div>
+      </div>
+
+      <div class="file-preview" id="filePreview">
+        <span class="file-icon" id="fileIcon"></span>
+        <div class="file-info">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-size" id="fileSize"></div>
+        </div>
+        <button class="clear-btn" id="clearBtn" title="Quitar archivo">✕</button>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <button class="btn" id="uploadBtn" disabled>
+        <span>Generar QR</span>
+      </button>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result" id="resultSection">
+      <h2>¡QR listo! 🎉</h2>
+      <p>Imprimilo en el dorso de tu llavero de resina</p>
+
+      <div class="qr-wrapper">
+        <img id="qrImage" src="" alt="QR Code">
+      </div>
+
+      <div class="url-row">
+        <input type="text" id="urlField" readonly>
+        <button onclick="copyUrl()">Copiar link</button>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn-outline" onclick="downloadQR()">⬇ Descargar QR (PNG)</button>
+        <button class="btn-outline" onclick="openMedia()">▶ Ver archivo</button>
+      </div>
+
+      <button class="reset-btn" onclick="resetForm()">Subir otro archivo</button>
+    </div>
+
+  </div>
+
+  <footer>Digi Llavers · cada llavero, una historia</footer>
+
+  <script>
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const filePreview= document.getElementById('filePreview');
+    const fileIcon   = document.getElementById('fileIcon');
+    const fileName   = document.getElementById('fileName');
+    const fileSize   = document.getElementById('fileSize');
+    const clearBtn   = document.getElementById('clearBtn');
+    const uploadBtn  = document.getElementById('uploadBtn');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressBar  = document.getElementById('progressBar');
+    const errorMsg   = document.getElementById('errorMsg');
+    const uploadSection = document.getElementById('uploadSection');
+    const resultSection = document.getElementById('resultSection');
+    const qrImage    = document.getElementById('qrImage');
+    const urlField   = document.getElementById('urlField');
+
+    let selectedFile = null;
+    let resultData   = null;
+
+    // ── Drag & drop ──────────────────────────────────────────
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (f) setFile(f);
+    });
+
+    fileInput.addEventListener('change', e => {
+      if (e.target.files[0]) setFile(e.target.files[0]);
+    });
+
+    clearBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      clearFile();
+    });
+
+    // ── File management ──────────────────────────────────────
+    function setFile(f) {
+      selectedFile = f;
+      fileName.textContent = f.name;
+      fileSize.textContent = formatSize(f.size);
+      fileIcon.textContent = f.type.startsWith('video') ? '🎬' : '🎵';
+      filePreview.classList.add('visible');
+      uploadBtn.disabled = false;
+      hideError();
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      filePreview.classList.remove('visible');
+      uploadBtn.disabled = true;
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    }
+
+    // ── Upload ───────────────────────────────────────────────
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      hideError();
+
+      uploadBtn.disabled = true;
+      progressWrap.classList.add('visible');
+      progressBar.style.width = '0%';
+
+      // Simular progreso suave mientras se hace el fetch
+      let fakeProgress = 0;
+      const ticker = setInterval(() => {
+        fakeProgress = Math.min(fakeProgress + Math.random() * 15, 85);
+        progressBar.style.width = fakeProgress + '%';
+      }, 200);
+
+      try {
+        const form = new FormData();
+        form.append('file', selectedFile);
+
+        const res = await fetch('/upload', { method: 'POST', body: form });
+        const data = await res.json();
+
+        clearInterval(ticker);
+        progressBar.style.width = '100%';
+
+        if (!res.ok) throw new Error(data.error || 'Error al subir');
+
+        resultData = data;
+        setTimeout(() => showResult(data), 300);
+      } catch (err) {
+        clearInterval(ticker);
+        progressWrap.classList.remove('visible');
+        progressBar.style.width = '0%';
+        uploadBtn.disabled = false;
+        showError(err.message);
+      }
+    });
+
+    // ── Result ───────────────────────────────────────────────
+    function showResult(data) {
+      qrImage.src = data.qr;
+      urlField.value = data.url;
+      uploadSection.style.display = 'none';
+      resultSection.classList.add('visible');
+    }
+
+    function resetForm() {
+      clearFile();
+      resultData = null;
+      progressWrap.classList.remove('visible');
+      progressBar.style.width = '0%';
+      resultSection.classList.remove('visible');
+      uploadSection.style.display = '';
+    }
+
+    function downloadQR() {
+      if (!resultData) return;
+      const a = document.createElement('a');
+      a.href = resultData.qr;
+      a.download = `qr-${resultData.id}.png`;
+      a.click();
+    }
+
+    function openMedia() {
+      if (resultData) window.open(resultData.url, '_blank');
+    }
+
+    function copyUrl() {
+      navigator.clipboard.writeText(urlField.value).then(() => {
+        const btn = document.querySelector('.url-row button');
+        btn.textContent = '✓ Copiado';
+        setTimeout(() => btn.textContent = 'Copiar link', 2000);
+      });
+    }
+
+    // ── Error ────────────────────────────────────────────────
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.add('visible');
+    }
+    function hideError() {
+      errorMsg.classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
