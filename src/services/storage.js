@@ -133,11 +133,37 @@ const supabaseDriver = {
 // ─── Driver local: direct upload no soportado ─────────────────────────────────
 Object.assign(localDriver, {
   async getUploadUrl()         { return null; },
-  async saveMetadata(id, mimetype) {
-    // Para local el metadata se guarda junto al binario en save().
-    // Este método solo se llama en el flujo de direct-upload (Supabase),
-    // no debería invocarse con el driver local.
+  async saveMetadata(id, mimetype) { /* no-op para local */ },
+
+  // ── Galería ──────────────────────────────────────────────────────────────────
+  async saveGallery(galleryId, files) {
+    // files: [{ buffer, mimetype }, ...]
+    const dir = resolveDir();
+    for (let i = 0; i < files.length; i++) {
+      fs.writeFileSync(path.join(dir, `${galleryId}_photo_${i}.bin`), files[i].buffer);
+    }
+    fs.writeFileSync(
+      path.join(dir, `${galleryId}.gallery.json`),
+      JSON.stringify({ mimetypes: files.map(f => f.mimetype), count: files.length }),
+    );
   },
+
+  async getGallery(galleryId) {
+    const dir = resolveDir();
+    const metaPath = path.join(dir, `${galleryId}.gallery.json`);
+    if (!fs.existsSync(metaPath)) return null;
+    const { mimetypes, count } = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    const files = [];
+    for (let i = 0; i < count; i++) {
+      const p = path.join(dir, `${galleryId}_photo_${i}.bin`);
+      if (!fs.existsSync(p)) return null;
+      files.push({ buffer: fs.readFileSync(p), mimetype: mimetypes[i] });
+    }
+    return files;
+  },
+
+  async getGalleryUploadUrls() { return null; }, // no soportado en local
+  async saveGalleryMetadata()  { /* no-op para local */ },
 });
 
 // ─── Driver Supabase: presigned upload ────────────────────────────────────────
@@ -159,6 +185,50 @@ Object.assign(supabaseDriver, {
       .upload(`${id}.meta`, meta, { contentType: 'application/json', upsert: true });
     if (error) throw new Error(`Supabase meta save error: ${error.message}`);
   },
+
+  // ── Galería ──────────────────────────────────────────────────────────────────
+  async getGalleryUploadUrls(galleryId, count) {
+    const sb = getSupabaseClient();
+    const urls = [];
+    for (let i = 0; i < count; i++) {
+      const { data, error } = await sb.storage
+        .from(BUCKET)
+        .createSignedUploadUrl(`${galleryId}/photo_${i}`);
+      if (error) throw new Error(`Supabase gallery presign error: ${error.message}`);
+      urls.push(data.signedUrl);
+    }
+    return urls;
+  },
+
+  async saveGalleryMetadata(galleryId, mimetypes) {
+    const sb = getSupabaseClient();
+    const meta = Buffer.from(JSON.stringify({ mimetypes, count: mimetypes.length }));
+    const { error } = await sb.storage
+      .from(BUCKET)
+      .upload(`${galleryId}.gallery`, meta, { contentType: 'application/json', upsert: true });
+    if (error) throw new Error(`Supabase gallery meta error: ${error.message}`);
+  },
+
+  async getGallery(galleryId) {
+    const sb = getSupabaseClient();
+    const { data: metaData, error: metaErr } = await sb.storage
+      .from(BUCKET).download(`${galleryId}.gallery`);
+    if (metaErr || !metaData) return null;
+    const { mimetypes, count } = JSON.parse(await metaData.text());
+
+    const files = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        sb.storage.from(BUCKET).download(`${galleryId}/photo_${i}`)
+          .then(async ({ data, error }) => {
+            if (error || !data) throw new Error(`Missing photo ${i}`);
+            return { buffer: Buffer.from(await data.arrayBuffer()), mimetype: mimetypes[i] };
+          }),
+      ),
+    );
+    return files;
+  },
+
+  async saveGallery() { throw new Error('Use getGalleryUploadUrls + saveGalleryMetadata for Supabase'); },
 });
 
 // ─── Selección de driver ──────────────────────────────────────────────────────
@@ -172,10 +242,15 @@ function getDriver() {
 }
 
 module.exports = {
-  save:         (...args) => getDriver().save(...args),
-  get:          (...args) => getDriver().get(...args),
-  exists:       (...args) => getDriver().exists(...args),
-  delete:       (...args) => getDriver().delete(...args),
-  getUploadUrl: (...args) => getDriver().getUploadUrl(...args),
-  saveMetadata: (...args) => getDriver().saveMetadata(...args),
+  save:                 (...args) => getDriver().save(...args),
+  get:                  (...args) => getDriver().get(...args),
+  exists:               (...args) => getDriver().exists(...args),
+  delete:               (...args) => getDriver().delete(...args),
+  getUploadUrl:         (...args) => getDriver().getUploadUrl(...args),
+  saveMetadata:         (...args) => getDriver().saveMetadata(...args),
+  // Galería
+  saveGallery:          (...args) => getDriver().saveGallery(...args),
+  getGallery:           (...args) => getDriver().getGallery(...args),
+  getGalleryUploadUrls: (...args) => getDriver().getGalleryUploadUrls(...args),
+  saveGalleryMetadata:  (...args) => getDriver().saveGalleryMetadata(...args),
 };

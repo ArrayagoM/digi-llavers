@@ -135,6 +135,87 @@
     }
     .file-preview .clear-btn:hover { color: var(--text); }
 
+    /* ── Mode tabs ── */
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .mode-tab {
+      flex: 1;
+      padding: 9px 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .mode-tab.active {
+      background: rgba(201,168,76,.12);
+      border-color: var(--gold);
+      color: var(--gold-light);
+    }
+
+    /* ── Photo grid previews ── */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .photo-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+    .photo-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .photo-thumb .remove-photo {
+      position: absolute;
+      top: 5px; right: 5px;
+      background: rgba(0,0,0,.65);
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    .photo-add {
+      aspect-ratio: 1;
+      border-radius: 10px;
+      border: 2px dashed var(--border);
+      background: var(--surface2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 11px;
+      gap: 6px;
+      transition: border-color .2s;
+    }
+    .photo-add:hover { border-color: var(--gold); }
+    .photo-add span { font-size: 22px; }
+    .photo-count-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #555;
+      margin-top: 10px;
+    }
+
     /* ── Button ── */
     .btn {
       display: flex;
@@ -283,22 +364,45 @@
 
     <!-- Upload form -->
     <div id="uploadSection">
-      <div class="drop-zone" id="dropZone">
-        <input type="file" id="fileInput" accept="audio/*,video/*">
-        <div class="drop-icon">🎵</div>
-        <div class="drop-label">
-          <strong>Elegí un archivo</strong> o arrastralo acá
-        </div>
-        <div class="drop-types">Audio de WhatsApp · MP3 · MP4 · Video</div>
+
+      <!-- Tabs de modo -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabMedia" onclick="switchMode('media')">🎵 Audio / Video</button>
+        <button class="mode-tab" id="tabPhotos" onclick="switchMode('photos')">📷 Fotos (1–4)</button>
       </div>
 
-      <div class="file-preview" id="filePreview">
-        <span class="file-icon" id="fileIcon"></span>
-        <div class="file-info">
-          <div class="file-name" id="fileName"></div>
-          <div class="file-size" id="fileSize"></div>
+      <!-- ── Modo Audio/Video ── -->
+      <div id="mediaMode">
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept="audio/*,video/*">
+          <div class="drop-icon">🎵</div>
+          <div class="drop-label">
+            <strong>Elegí un archivo</strong> o arrastralo acá
+          </div>
+          <div class="drop-types">Audio de WhatsApp · MP3 · MP4 · Video</div>
         </div>
-        <button class="clear-btn" id="clearBtn" title="Quitar archivo">✕</button>
+
+        <div class="file-preview" id="filePreview">
+          <span class="file-icon" id="fileIcon"></span>
+          <div class="file-info">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-size" id="fileSize"></div>
+          </div>
+          <button class="clear-btn" id="clearBtn" title="Quitar archivo">✕</button>
+        </div>
+      </div>
+
+      <!-- ── Modo Fotos ── -->
+      <div id="photosMode" style="display:none">
+        <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple style="display:none">
+        <div class="photo-grid" id="photoGrid">
+          <!-- Las fotos seleccionadas aparecen acá -->
+          <div class="photo-add" id="photoAddBtn">
+            <span>＋</span>
+            Agregar foto
+          </div>
+        </div>
+        <p class="photo-count-hint" id="photoCountHint">Podés agregar hasta 4 fotos</p>
       </div>
 
       <div class="error-msg" id="errorMsg"></div>
@@ -339,48 +443,62 @@
   <footer>Digi Llavers · cada llavero, una historia</footer>
 
   <script>
-    const dropZone   = document.getElementById('dropZone');
-    const fileInput  = document.getElementById('fileInput');
-    const filePreview= document.getElementById('filePreview');
-    const fileIcon   = document.getElementById('fileIcon');
-    const fileName   = document.getElementById('fileName');
-    const fileSize   = document.getElementById('fileSize');
-    const clearBtn   = document.getElementById('clearBtn');
-    const uploadBtn  = document.getElementById('uploadBtn');
-    const progressWrap = document.getElementById('progressWrap');
-    const progressBar  = document.getElementById('progressBar');
-    const errorMsg   = document.getElementById('errorMsg');
+    // ── Refs ────────────────────────────────────────────────
+    const dropZone      = document.getElementById('dropZone');
+    const fileInput     = document.getElementById('fileInput');
+    const filePreview   = document.getElementById('filePreview');
+    const fileIcon      = document.getElementById('fileIcon');
+    const fileName      = document.getElementById('fileName');
+    const fileSize      = document.getElementById('fileSize');
+    const clearBtn      = document.getElementById('clearBtn');
+    const uploadBtn     = document.getElementById('uploadBtn');
+    const progressWrap  = document.getElementById('progressWrap');
+    const progressBar   = document.getElementById('progressBar');
+    const errorMsg      = document.getElementById('errorMsg');
     const uploadSection = document.getElementById('uploadSection');
     const resultSection = document.getElementById('resultSection');
-    const qrImage    = document.getElementById('qrImage');
-    const urlField   = document.getElementById('urlField');
+    const qrImage       = document.getElementById('qrImage');
+    const urlField      = document.getElementById('urlField');
+    const photoInput    = document.getElementById('photoInput');
+    const photoGrid     = document.getElementById('photoGrid');
+    const photoAddBtn   = document.getElementById('photoAddBtn');
+    const photoCountHint= document.getElementById('photoCountHint');
 
-    let selectedFile = null;
-    let resultData   = null;
+    let selectedFile  = null;
+    let selectedPhotos = [];   // [File, ...]
+    let resultData    = null;
+    let currentMode   = 'media';
 
-    // ── Drag & drop ──────────────────────────────────────────
-    dropZone.addEventListener('dragover', e => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
+    // ── Helpers ─────────────────────────────────────────────
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.add('visible'); }
+    function hideError()    { errorMsg.classList.remove('visible'); }
+
+    // ── Switch mode ──────────────────────────────────────────
+    function switchMode(mode) {
+      currentMode = mode;
+      document.getElementById('tabMedia').classList.toggle('active', mode === 'media');
+      document.getElementById('tabPhotos').classList.toggle('active', mode === 'photos');
+      document.getElementById('mediaMode').style.display  = mode === 'media'  ? '' : 'none';
+      document.getElementById('photosMode').style.display = mode === 'photos' ? '' : 'none';
+      hideError();
+      uploadBtn.disabled = mode === 'media' ? !selectedFile : selectedPhotos.length === 0;
+    }
+
+    // ── Drag & drop (media) ──────────────────────────────────
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const f = e.dataTransfer.files[0];
-      if (f) setFile(f);
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
     });
+    fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+    clearBtn.addEventListener('click', e => { e.stopPropagation(); clearFile(); });
 
-    fileInput.addEventListener('change', e => {
-      if (e.target.files[0]) setFile(e.target.files[0]);
-    });
-
-    clearBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      clearFile();
-    });
-
-    // ── File management ──────────────────────────────────────
     function setFile(f) {
       selectedFile = f;
       fileName.textContent = f.name;
@@ -390,102 +508,84 @@
       uploadBtn.disabled = false;
       hideError();
     }
-
     function clearFile() {
-      selectedFile = null;
-      fileInput.value = '';
+      selectedFile = null; fileInput.value = '';
       filePreview.classList.remove('visible');
       uploadBtn.disabled = true;
     }
 
-    function formatSize(bytes) {
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-      return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    // ── Fotos ────────────────────────────────────────────────
+    const MAX_PHOTOS = 4;
+
+    photoAddBtn.addEventListener('click', () => {
+      if (selectedPhotos.length < MAX_PHOTOS) photoInput.click();
+    });
+
+    photoInput.addEventListener('change', e => {
+      const files = Array.from(e.target.files);
+      const available = MAX_PHOTOS - selectedPhotos.length;
+      files.slice(0, available).forEach(addPhoto);
+      photoInput.value = '';
+    });
+
+    function addPhoto(file) {
+      if (selectedPhotos.length >= MAX_PHOTOS) return;
+      selectedPhotos.push(file);
+      renderPhotoGrid();
+      hideError();
+      uploadBtn.disabled = selectedPhotos.length === 0;
+    }
+
+    function removePhoto(i) {
+      selectedPhotos.splice(i, 1);
+      renderPhotoGrid();
+      uploadBtn.disabled = selectedPhotos.length === 0;
+    }
+
+    function renderPhotoGrid() {
+      photoGrid.innerHTML = '';
+      selectedPhotos.forEach((file, i) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'photo-thumb';
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.onload = () => URL.revokeObjectURL(img.src);
+        const rmBtn = document.createElement('button');
+        rmBtn.className = 'remove-photo';
+        rmBtn.textContent = '✕';
+        rmBtn.onclick = (e) => { e.stopPropagation(); removePhoto(i); };
+        thumb.append(img, rmBtn);
+        photoGrid.appendChild(thumb);
+      });
+      if (selectedPhotos.length < MAX_PHOTOS) {
+        const addEl = document.createElement('div');
+        addEl.className = 'photo-add';
+        addEl.id = 'photoAddBtn';
+        addEl.innerHTML = '<span>＋</span>Agregar foto';
+        addEl.addEventListener('click', () => photoInput.click());
+        photoGrid.appendChild(addEl);
+      }
+      const rem = MAX_PHOTOS - selectedPhotos.length;
+      photoCountHint.textContent = selectedPhotos.length === 0
+        ? 'Podés agregar hasta 4 fotos'
+        : selectedPhotos.length === MAX_PHOTOS
+          ? '¡Máximo alcanzado!'
+          : `${selectedPhotos.length} foto${selectedPhotos.length > 1 ? 's' : ''} · podés agregar ${rem} más`;
     }
 
     // ── Upload ───────────────────────────────────────────────
     uploadBtn.addEventListener('click', async () => {
-      if (!selectedFile) return;
       hideError();
       uploadBtn.disabled = true;
       progressWrap.classList.add('visible');
       progressBar.style.width = '0%';
 
       try {
-        // 1 ── Intentar flujo de direct-upload (Supabase → sin límite de Vercel)
-        const presignRes = await fetch('/upload/presign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mimetype: selectedFile.type, originalName: selectedFile.name }),
-        });
-
-        if (presignRes.ok) {
-          // ── Direct upload ──────────────────────────────────
-          const { id, uploadUrl } = await presignRes.json();
-
-          // Subir el binario directo a Supabase con progreso real (XHR)
-          await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', uploadUrl);
-            xhr.setRequestHeader('Content-Type', selectedFile.type);
-            xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable) {
-                progressBar.style.width = Math.round((e.loaded / e.total) * 90) + '%';
-              }
-            };
-            xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`Upload error ${xhr.status}`));
-            xhr.onerror = () => reject(new Error('Error de red al subir el archivo'));
-            xhr.send(selectedFile);
-          });
-
-          progressBar.style.width = '95%';
-
-          // Notificar al servidor para guardar metadata y generar QR
-          const completeRes = await fetch('/upload/complete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, mimetype: selectedFile.type, originalName: selectedFile.name }),
-          });
-          const data = await completeRes.json();
-          if (!completeRes.ok) throw new Error(data.error || 'Error al generar el QR');
-
-          progressBar.style.width = '100%';
-          resultData = data;
-          setTimeout(() => showResult(data), 300);
-
+        if (currentMode === 'photos') {
+          await uploadGallery();
         } else {
-          // ── Flujo tradicional (local / driver sin presign) ──
-          const presignData = await presignRes.json().catch(() => ({}));
-          if (presignRes.status !== 404) {
-            throw new Error(presignData.error || `Error ${presignRes.status}`);
-          }
-
-          // Simular progreso mientras se hace el fetch
-          let fake = 0;
-          const ticker = setInterval(() => {
-            fake = Math.min(fake + Math.random() * 12, 85);
-            progressBar.style.width = fake + '%';
-          }, 200);
-
-          const form = new FormData();
-          form.append('file', selectedFile);
-          const res = await fetch('/upload', { method: 'POST', body: form });
-
-          clearInterval(ticker);
-          progressBar.style.width = '100%';
-
-          const ct = res.headers.get('content-type') || '';
-          const data = ct.includes('application/json')
-            ? await res.json()
-            : await res.text().then(() => { throw new Error(`Error ${res.status} del servidor`); });
-
-          if (!res.ok) throw new Error(data.error || 'Error al subir');
-
-          resultData = data;
-          setTimeout(() => showResult(data), 300);
+          await uploadMedia();
         }
-
       } catch (err) {
         progressWrap.classList.remove('visible');
         progressBar.style.width = '0%';
@@ -494,7 +594,109 @@
       }
     });
 
-    // ── Result ───────────────────────────────────────────────
+    // ── Upload media (audio/video) ───────────────────────────
+    async function uploadMedia() {
+      const presignRes = await fetch('/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mimetype: selectedFile.type, originalName: selectedFile.name }),
+      });
+
+      if (presignRes.ok) {
+        const { id, uploadUrl } = await presignRes.json();
+        await xhrUpload(uploadUrl, selectedFile, selectedFile.type, pct => {
+          progressBar.style.width = Math.round(pct * 90) + '%';
+        });
+        progressBar.style.width = '95%';
+        const completeRes = await fetch('/upload/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, mimetype: selectedFile.type, originalName: selectedFile.name }),
+        });
+        const data = await completeRes.json();
+        if (!completeRes.ok) throw new Error(data.error || 'Error al generar el QR');
+        finishUpload(data);
+      } else {
+        const presignData = await presignRes.json().catch(() => ({}));
+        if (presignRes.status !== 404) throw new Error(presignData.error || `Error ${presignRes.status}`);
+        // Fallback tradicional (driver local)
+        let fake = 0;
+        const ticker = setInterval(() => {
+          fake = Math.min(fake + Math.random() * 12, 85);
+          progressBar.style.width = fake + '%';
+        }, 200);
+        const form = new FormData();
+        form.append('file', selectedFile);
+        const res = await fetch('/upload', { method: 'POST', body: form });
+        clearInterval(ticker);
+        progressBar.style.width = '100%';
+        const ct = res.headers.get('content-type') || '';
+        const data = ct.includes('application/json')
+          ? await res.json()
+          : await res.text().then(() => { throw new Error(`Error ${res.status} del servidor`); });
+        if (!res.ok) throw new Error(data.error || 'Error al subir');
+        finishUpload(data);
+      }
+    }
+
+    // ── Upload galería (fotos) ───────────────────────────────
+    async function uploadGallery() {
+      if (selectedPhotos.length === 0) return;
+
+      const mimetypes = selectedPhotos.map(f => f.type);
+      const originalNames = selectedPhotos.map(f => f.name);
+
+      const presignRes = await fetch('/upload/presign-gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mimetypes, originalNames }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error || 'Error al iniciar subida');
+
+      const { id, uploadUrls } = presignData;
+
+      // Subir cada foto con progreso acumulado
+      for (let i = 0; i < selectedPhotos.length; i++) {
+        await xhrUpload(uploadUrls[i], selectedPhotos[i], selectedPhotos[i].type, pct => {
+          const base = (i / selectedPhotos.length) * 90;
+          const step = (1  / selectedPhotos.length) * 90;
+          progressBar.style.width = Math.round(base + pct * step) + '%';
+        });
+      }
+
+      progressBar.style.width = '95%';
+
+      const completeRes = await fetch('/upload/complete-gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, mimetypes, originalNames }),
+      });
+      const data = await completeRes.json();
+      if (!completeRes.ok) throw new Error(data.error || 'Error al generar el QR');
+      finishUpload(data);
+    }
+
+    // ── XHR con progreso ─────────────────────────────────────
+    function xhrUpload(url, file, contentType, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        xhr.setRequestHeader('Content-Type', contentType);
+        xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`Upload error ${xhr.status}`));
+        xhr.onerror = () => reject(new Error('Error de red al subir el archivo'));
+        xhr.send(file);
+      });
+    }
+
+    // ── Resultado ────────────────────────────────────────────
+    function finishUpload(data) {
+      progressBar.style.width = '100%';
+      resultData = data;
+      setTimeout(() => showResult(data), 300);
+    }
+
     function showResult(data) {
       qrImage.src = data.qr;
       urlField.value = data.url;
@@ -504,18 +706,21 @@
 
     function resetForm() {
       clearFile();
+      selectedPhotos = [];
+      renderPhotoGrid();
       resultData = null;
       progressWrap.classList.remove('visible');
       progressBar.style.width = '0%';
       resultSection.classList.remove('visible');
       uploadSection.style.display = '';
+      uploadBtn.disabled = true;
     }
 
     function downloadQR() {
       if (!resultData) return;
       const a = document.createElement('a');
       a.href = resultData.qr;
-      a.download = `qr-${resultData.id}.png`;
+      a.download = 'qr-' + resultData.id + '.png';
       a.click();
     }
 
@@ -529,15 +734,6 @@
         btn.textContent = '✓ Copiado';
         setTimeout(() => btn.textContent = 'Copiar link', 2000);
       });
-    }
-
-    // ── Error ────────────────────────────────────────────────
-    function showError(msg) {
-      errorMsg.textContent = msg;
-      errorMsg.classList.add('visible');
-    }
-    function hideError() {
-      errorMsg.classList.remove('visible');
     }
   </script>
 </body>

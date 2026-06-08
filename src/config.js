@@ -19,6 +19,13 @@ const config = {
       process.env.ALLOWED_MIMETYPES ||
       'audio/ogg,audio/mpeg,audio/wav,audio/mp4,video/mp4,video/webm,video/quicktime'
     ).split(',').map(m => m.trim()),
+
+    allowedImageMimetypes: (
+      process.env.ALLOWED_IMAGE_MIMETYPES ||
+      'image/jpeg,image/png,image/webp,image/gif'
+    ).split(',').map(m => m.trim()),
+
+    maxGalleryPhotos: parseInt(process.env.MAX_GALLERY_PHOTOS || '4', 10),
   },
 };
 

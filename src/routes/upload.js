@@ -117,4 +117,68 @@ router.post('/complete', async (req, res, next) => {
   }
 });
 
+// ─── POST /upload/presign-gallery ─────────────────────────────────────────────
+// Solicita URLs firmadas para subir 1–4 fotos directo a Supabase.
+// Body: { mimetypes: ['image/jpeg', ...] }
+// Responde: { id, uploadUrls: [...] }
+router.post('/presign-gallery', async (req, res, next) => {
+  try {
+    const { mimetypes } = req.body;
+
+    if (!Array.isArray(mimetypes) || mimetypes.length < 1 || mimetypes.length > config.upload.maxGalleryPhotos) {
+      return res.status(400).json({
+        error: `Enviá entre 1 y ${config.upload.maxGalleryPhotos} fotos.`,
+      });
+    }
+
+    const invalid = mimetypes.find(m => !config.upload.allowedImageMimetypes.includes(m));
+    if (invalid) {
+      return res.status(415).json({
+        error: `Tipo no permitido: ${invalid}. Aceptados: ${config.upload.allowedImageMimetypes.join(', ')}`,
+      });
+    }
+
+    const id = nanoid(10);
+    const uploadUrls = await storage.getGalleryUploadUrls(id, mimetypes.length);
+
+    if (!uploadUrls) {
+      return res.status(404).json({ error: 'Direct upload no disponible para este driver' });
+    }
+
+    return res.json({ id, uploadUrls });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /upload/complete-gallery ────────────────────────────────────────────
+// El browser ya subió las fotos directo a Supabase.
+// Body: { id, mimetypes: [...], originalNames: [...] }
+// Responde: { id, url, qr }
+router.post('/complete-gallery', async (req, res, next) => {
+  try {
+    const { id, mimetypes, originalNames } = req.body;
+
+    if (!id || !Array.isArray(mimetypes) || mimetypes.length < 1) {
+      return res.status(400).json({ error: 'Faltan campos: id, mimetypes' });
+    }
+
+    await storage.saveGalleryMetadata(id, mimetypes);
+
+    const qrBuffer = await generateQR(id);
+    const qrBase64 = `data:image/png;base64,${qrBuffer.toString('base64')}`;
+
+    return res.status(201).json({
+      id,
+      url:           mediaUrl(id),
+      qr:            qrBase64,
+      type:          'gallery',
+      count:         mimetypes.length,
+      originalNames: originalNames || [],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
