@@ -67,7 +67,7 @@ function getSupabaseClient() {
   if (!url || !serviceKey) {
     throw new Error('Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en las variables de entorno');
   }
-  if (!serviceKey.startsWith('eyJ')) {
+  if (!serviceKey.startsWith('eyJ') && !serviceKey.startsWith('sb_secret_')) {
     throw new Error('SUPABASE_SERVICE_KEY no es válida. Copiá la "service_role" key desde el dashboard de Supabase → Project Settings → API');
   }
   _supabase = createClient(url, serviceKey);
