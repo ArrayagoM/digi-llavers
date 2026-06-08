@@ -64,7 +64,12 @@ function getSupabaseClient() {
   if (_supabase) return _supabase;
   const { createClient } = require('@supabase/supabase-js');
   const { url, serviceKey } = config.storage.supabase;
-  if (!url || !serviceKey) throw new Error('Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en .env');
+  if (!url || !serviceKey) {
+    throw new Error('Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en las variables de entorno');
+  }
+  if (!serviceKey.startsWith('eyJ')) {
+    throw new Error('SUPABASE_SERVICE_KEY no es válida. Copiá la "service_role" key desde el dashboard de Supabase → Project Settings → API');
+  }
   _supabase = createClient(url, serviceKey);
   return _supabase;
 }
