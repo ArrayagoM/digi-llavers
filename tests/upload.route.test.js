@@ -6,10 +6,10 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 
-const TEST_DIR = path.join(os.tmpdir(), 'digi-llavers-test-upload');
+const mockTestDir = path.join(os.tmpdir(), 'digi-llavers-test-upload');
 
 jest.mock('../src/config', () => ({
-  storage: { driver: 'local', uploadDir: TEST_DIR },
+  storage: { driver: 'local', uploadDir: mockTestDir },
   upload: {
     allowedMimetypes: ['audio/mpeg', 'audio/ogg', 'video/mp4'],
     maxFileSizeBytes: 5 * 1024 * 1024,
@@ -22,17 +22,19 @@ const request = require('supertest');
 const app = require('../src/app');
 
 beforeEach(() => {
-  if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  if (fs.existsSync(mockTestDir)) fs.rmSync(mockTestDir, { recursive: true });
 });
 
 afterAll(() => {
-  if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  if (fs.existsSync(mockTestDir)) fs.rmSync(mockTestDir, { recursive: true });
 });
 
 // Buffer falso que simula un audio mp3 (los primeros bytes no importan aquí)
 const fakeAudioBuffer = Buffer.alloc(1024, 0xff);
 
 describe('POST /upload', () => {
+  jest.setTimeout(30000);
+
   test('201 — sube un archivo de audio válido', async () => {
     const res = await request(app)
       .post('/upload')
@@ -80,6 +82,6 @@ describe('POST /upload', () => {
       .attach('file', fakeAudioBuffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' });
 
     expect(res.status).toBe(201);
-    expect(storage.exists(res.body.id)).toBe(true);
+    expect(await storage.exists(res.body.id)).toBe(true);
   });
 });

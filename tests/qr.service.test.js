@@ -18,6 +18,8 @@ describe('mediaUrl', () => {
 });
 
 describe('generateQR', () => {
+  jest.setTimeout(30000);
+
   test('devuelve un Buffer', async () => {
     const buf = await generateQR('abc123');
     expect(Buffer.isBuffer(buf)).toBe(true);

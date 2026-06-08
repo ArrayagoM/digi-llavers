@@ -6,10 +6,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const TEST_DIR = path.join(os.tmpdir(), 'digi-llavers-test-storage');
+const mockTestDir = path.join(os.tmpdir(), 'digi-llavers-test-storage');
 
 jest.mock('../src/config', () => ({
-  storage: { driver: 'local', uploadDir: TEST_DIR },
+  storage: { driver: 'local', uploadDir: mockTestDir },
   upload: { allowedMimetypes: ['audio/mpeg'], maxFileSizeBytes: 10 * 1024 * 1024 },
   port: 3000,
   baseUrl: 'http://localhost:3000',
@@ -18,11 +18,11 @@ jest.mock('../src/config', () => ({
 const storage = require('../src/services/storage');
 
 beforeEach(() => {
-  if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  if (fs.existsSync(mockTestDir)) fs.rmSync(mockTestDir, { recursive: true });
 });
 
 afterAll(() => {
-  if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  if (fs.existsSync(mockTestDir)) fs.rmSync(mockTestDir, { recursive: true });
 });
 
 describe('storage.save + storage.get', () => {

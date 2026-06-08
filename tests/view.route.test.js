@@ -6,10 +6,10 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 
-const TEST_DIR = path.join(os.tmpdir(), 'digi-llavers-test-view');
+const mockTestDir = path.join(os.tmpdir(), 'digi-llavers-test-view');
 
 jest.mock('../src/config', () => ({
-  storage: { driver: 'local', uploadDir: TEST_DIR },
+  storage: { driver: 'local', uploadDir: mockTestDir },
   upload: {
     allowedMimetypes: ['audio/mpeg', 'audio/ogg', 'video/mp4'],
     maxFileSizeBytes: 5 * 1024 * 1024,
@@ -27,13 +27,13 @@ const AUDIO_BUFFER = Buffer.from('fake audio data');
 const VIDEO_BUFFER = Buffer.from('fake video data');
 
 beforeAll(async () => {
-  if (!fs.existsSync(TEST_DIR)) fs.mkdirSync(TEST_DIR, { recursive: true });
+  if (!fs.existsSync(mockTestDir)) fs.mkdirSync(mockTestDir, { recursive: true });
   await storage.save(TEST_ID, 'audio/mpeg', AUDIO_BUFFER);
   await storage.save('videotest0', 'video/mp4', VIDEO_BUFFER);
 });
 
 afterAll(() => {
-  if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
+  if (fs.existsSync(mockTestDir)) fs.rmSync(mockTestDir, { recursive: true });
 });
 
 describe('GET /m/:id — player page', () => {
