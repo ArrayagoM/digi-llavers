@@ -408,46 +408,85 @@
     uploadBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
       hideError();
-
       uploadBtn.disabled = true;
       progressWrap.classList.add('visible');
       progressBar.style.width = '0%';
 
-      // Simular progreso suave mientras se hace el fetch
-      let fakeProgress = 0;
-      const ticker = setInterval(() => {
-        fakeProgress = Math.min(fakeProgress + Math.random() * 15, 85);
-        progressBar.style.width = fakeProgress + '%';
-      }, 200);
-
       try {
-        const form = new FormData();
-        form.append('file', selectedFile);
+        // 1 ── Intentar flujo de direct-upload (Supabase → sin límite de Vercel)
+        const presignRes = await fetch('/upload/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mimetype: selectedFile.type, originalName: selectedFile.name }),
+        });
 
-        const res = await fetch('/upload', { method: 'POST', body: form });
+        if (presignRes.ok) {
+          // ── Direct upload ──────────────────────────────────
+          const { id, uploadUrl } = await presignRes.json();
 
-        clearInterval(ticker);
-        progressBar.style.width = '100%';
+          // Subir el binario directo a Supabase con progreso real (XHR)
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl);
+            xhr.setRequestHeader('Content-Type', selectedFile.type);
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                progressBar.style.width = Math.round((e.loaded / e.total) * 90) + '%';
+              }
+            };
+            xhr.onload  = () => xhr.status < 300 ? resolve() : reject(new Error(`Upload error ${xhr.status}`));
+            xhr.onerror = () => reject(new Error('Error de red al subir el archivo'));
+            xhr.send(selectedFile);
+          });
 
-        let data;
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          data = await res.json();
+          progressBar.style.width = '95%';
+
+          // Notificar al servidor para guardar metadata y generar QR
+          const completeRes = await fetch('/upload/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, mimetype: selectedFile.type, originalName: selectedFile.name }),
+          });
+          const data = await completeRes.json();
+          if (!completeRes.ok) throw new Error(data.error || 'Error al generar el QR');
+
+          progressBar.style.width = '100%';
+          resultData = data;
+          setTimeout(() => showResult(data), 300);
+
         } else {
-          // El servidor devolvió texto plano (ej. 413 de proxy/ngrok)
-          const text = await res.text();
-          if (res.status === 413) {
-            throw new Error('El archivo es demasiado grande. Reducí el tamaño o usá un formato más comprimido.');
+          // ── Flujo tradicional (local / driver sin presign) ──
+          const presignData = await presignRes.json().catch(() => ({}));
+          if (presignRes.status !== 404) {
+            throw new Error(presignData.error || `Error ${presignRes.status}`);
           }
-          throw new Error(`Error ${res.status}: respuesta inesperada del servidor.`);
+
+          // Simular progreso mientras se hace el fetch
+          let fake = 0;
+          const ticker = setInterval(() => {
+            fake = Math.min(fake + Math.random() * 12, 85);
+            progressBar.style.width = fake + '%';
+          }, 200);
+
+          const form = new FormData();
+          form.append('file', selectedFile);
+          const res = await fetch('/upload', { method: 'POST', body: form });
+
+          clearInterval(ticker);
+          progressBar.style.width = '100%';
+
+          const ct = res.headers.get('content-type') || '';
+          const data = ct.includes('application/json')
+            ? await res.json()
+            : await res.text().then(() => { throw new Error(`Error ${res.status} del servidor`); });
+
+          if (!res.ok) throw new Error(data.error || 'Error al subir');
+
+          resultData = data;
+          setTimeout(() => showResult(data), 300);
         }
 
-        if (!res.ok) throw new Error(data.error || 'Error al subir');
-
-        resultData = data;
-        setTimeout(() => showResult(data), 300);
       } catch (err) {
-        clearInterval(ticker);
         progressWrap.classList.remove('visible');
         progressBar.style.width = '0%';
         uploadBtn.disabled = false;

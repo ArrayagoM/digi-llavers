@@ -125,6 +125,37 @@ const supabaseDriver = {
   },
 };
 
+// ─── Driver local: direct upload no soportado ─────────────────────────────────
+Object.assign(localDriver, {
+  async getUploadUrl()         { return null; },
+  async saveMetadata(id, mimetype) {
+    // Para local el metadata se guarda junto al binario en save().
+    // Este método solo se llama en el flujo de direct-upload (Supabase),
+    // no debería invocarse con el driver local.
+  },
+});
+
+// ─── Driver Supabase: presigned upload ────────────────────────────────────────
+Object.assign(supabaseDriver, {
+  async getUploadUrl(id) {
+    const sb = getSupabaseClient();
+    const { data, error } = await sb.storage
+      .from(BUCKET)
+      .createSignedUploadUrl(id);
+    if (error) throw new Error(`Supabase presign error: ${error.message}`);
+    return data.signedUrl;
+  },
+
+  async saveMetadata(id, mimetype) {
+    const sb = getSupabaseClient();
+    const meta = Buffer.from(JSON.stringify({ mimetype }));
+    const { error } = await sb.storage
+      .from(BUCKET)
+      .upload(`${id}.meta`, meta, { contentType: 'application/json', upsert: true });
+    if (error) throw new Error(`Supabase meta save error: ${error.message}`);
+  },
+});
+
 // ─── Selección de driver ──────────────────────────────────────────────────────
 
 const drivers = { local: localDriver, supabase: supabaseDriver };
@@ -136,8 +167,10 @@ function getDriver() {
 }
 
 module.exports = {
-  save:   (...args) => getDriver().save(...args),
-  get:    (...args) => getDriver().get(...args),
-  exists: (...args) => getDriver().exists(...args),
-  delete: (...args) => getDriver().delete(...args),
+  save:         (...args) => getDriver().save(...args),
+  get:          (...args) => getDriver().get(...args),
+  exists:       (...args) => getDriver().exists(...args),
+  delete:       (...args) => getDriver().delete(...args),
+  getUploadUrl: (...args) => getDriver().getUploadUrl(...args),
+  saveMetadata: (...args) => getDriver().saveMetadata(...args),
 };
