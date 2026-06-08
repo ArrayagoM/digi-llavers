@@ -425,10 +425,22 @@
         form.append('file', selectedFile);
 
         const res = await fetch('/upload', { method: 'POST', body: form });
-        const data = await res.json();
 
         clearInterval(ticker);
         progressBar.style.width = '100%';
+
+        let data;
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          // El servidor devolvió texto plano (ej. 413 de proxy/ngrok)
+          const text = await res.text();
+          if (res.status === 413) {
+            throw new Error('El archivo es demasiado grande. Reducí el tamaño o usá un formato más comprimido.');
+          }
+          throw new Error(`Error ${res.status}: respuesta inesperada del servidor.`);
+        }
 
         if (!res.ok) throw new Error(data.error || 'Error al subir');
 
